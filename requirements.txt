@@ -1,0 +1,18 @@
+# =============================================================================
+# requirements.txt
+# -----------------------------------------------------------------------------
+# Responsible for: Python dependencies for the search-map brain (src/) and its
+#                  demo. Install into a local virtualenv:
+#                      python3 -m venv .venv
+#                      .venv/bin/python -m pip install -r requirements.txt
+# Role in project: The brain is the critical path and runs standalone on mock
+#                  observations, so it deliberately keeps a tiny dependency set
+#                  (no geo stack yet — pyproj/rasterio/osmium are deferred behind
+#                  seams per the plan). Other tracks (dashboard, voice, detector)
+#                  add their own deps.
+# =============================================================================
+
+numpy>=2.0        # vectorized grid math: half-normal decay, kernels, renormalize
+matplotlib>=3.8   # demo-only: posterior/coverage heatmap PNGs per beat
+pytest>=8.0       # unit tests for prior / update / trigger
+pytest-cov>=5.0   # coverage report (pytest --cov=src --cov-report=term-missing)
