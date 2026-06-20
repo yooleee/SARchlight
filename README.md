@@ -1,2 +1,2 @@
 # SAR-system
-AI Berkely 2026 Hackathon project
+AI Berkeley 2026 Hackathon project
