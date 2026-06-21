@@ -108,18 +108,20 @@ def _fmt_hm(seconds: float) -> str:
 
 def _cell_to_norm(cell: Cell, grid: GridSpec) -> Dict[str, float]:
     """
-    Map a (row, col) cell to the UI's normalized {x, y} in [0, 1], x right / y down.
+    Map a (row, col) cell CENTER to the UI's normalized {x, y} in [0, 1], x right / y down.
 
     Why:
-        The dashboard draws everything in a normalized 0..1 box. Row 0 is SOUTH (the brain
-        renders with origin='lower'), and the UI's y points DOWN, so we flip y = 1 - row/…
-        to keep north up. Using ONE helper for every overlay (blobs, path, detections,
-        waypoints) guarantees they all share the same frame — internal consistency over
-        absolute orientation, which is cosmetic for the demo.
+        The dashboard draws everything in a normalized 0..1 box, now OVER a server-rendered base
+        image (integration/map_render). That image is a matplotlib imshow whose cells span the
+        extent [-0.5, n-0.5], so a cell's CENTER sits at fraction (c+0.5)/n_cols horizontally and
+        (r+0.5)/n_rows vertically. We use that exact cell-center form here (not the old corner
+        form c/(n_cols-1)) so the vector overlays line up with the base image pixel-for-pixel.
+        Row 0 is SOUTH (the base renders origin='lower') and the UI's y points DOWN, so we flip y
+        to keep north up. ONE helper for every overlay guarantees they share the base's frame.
     """
     r, c = cell
-    x = c / max(grid.n_cols - 1, 1)
-    y = 1.0 - r / max(grid.n_rows - 1, 1)
+    x = (c + 0.5) / grid.n_cols
+    y = 1.0 - (r + 0.5) / grid.n_rows
     return {"x": round(x, 4), "y": round(y, 4)}
 
 
