@@ -160,7 +160,12 @@ def test_fetch_ops_returns_none_when_unreachable(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_spoken_minutes_formats_clock():
-    """MM:SS becomes a natural spoken minutes phrase; junk passes through."""
+    """HH:MM:SS (the server's format) and MM:SS both become spoken minutes; junk passes through."""
+    # HH:MM:SS — what the integration server's /ops actually emits.
+    assert _spoken_minutes("00:22:03") == "about 22 minutes"
+    assert _spoken_minutes("01:05:00") == "about 65 minutes"
+    # MM:SS — also accepted.
     assert _spoken_minutes("22:03") == "about 22 minutes"
     assert _spoken_minutes("01:00") == "about 1 minute"
+    # Not a clock -> returned unchanged.
     assert _spoken_minutes("not-a-clock") == "not-a-clock"

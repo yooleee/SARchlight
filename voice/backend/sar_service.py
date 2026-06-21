@@ -59,7 +59,7 @@ _SNAPSHOT = {
     "status": "located",
     "located": True,
     "n_drones": 3,
-    "elapsed": "22:03",
+    "elapsed": "00:22:03",
     "coverage_pct": 2.0,
     "coverage_km2": 1.29,
     "confidence_pct": 100,
@@ -79,22 +79,31 @@ _SNAPSHOT = {
 
 def _spoken_minutes(elapsed: str) -> str:
     """
-    Turn an "MM:SS" clock string into a speech-friendly minutes phrase.
+    Turn a clock string into a speech-friendly minutes phrase.
 
     Args:
-        elapsed: Elapsed-time string like "22:03" (from the projected stats).
+        elapsed: Elapsed-time string. The integration server emits HH:MM:SS
+            (e.g. "00:22:03"); MM:SS (e.g. "22:03") is also accepted.
 
     Returns:
         A phrase like "about 22 minutes". Falls back to the raw string if it
-        isn't in the expected MM:SS form.
+        isn't a recognizable clock.
 
     Why:
-        The agent speaks its answers aloud; reading "22:03" as a clock is
+        The agent speaks its answers aloud; reading a clock digit-by-digit is
         awkward, and seconds-level precision is noise for a status update.
+        Parsing total minutes (hours*60 + minutes) keeps it correct whether the
+        source uses HH:MM:SS or MM:SS.
     """
     try:
-        minutes = int(elapsed.split(":")[0])
-    except (ValueError, AttributeError, IndexError):
+        parts = [int(p) for p in elapsed.split(":")]
+    except (ValueError, AttributeError):
+        return elapsed
+    if len(parts) == 3:
+        minutes = parts[0] * 60 + parts[1]
+    elif len(parts) == 2:
+        minutes = parts[0]
+    else:
         return elapsed
     unit = "minute" if minutes == 1 else "minutes"
     return f"about {minutes} {unit}"
