@@ -30,7 +30,7 @@ from matplotlib.patches import Rectangle
 from PIL import Image
 
 from src.common.config import BrainConfig
-from src.common.contracts import LocatedEvent, SensorType
+from src.common.contracts import LocatedEvent, MapState, SensorType
 from src.common.grid import GridSpec
 from src.geo.georeferencer import GeoReferencer, _pixel_to_ground_local
 from src.search.brain import SearchBrain
@@ -92,6 +92,10 @@ class PlannerFrame:
     status: str
     p_out: float
     located_now: bool
+    # A snapshot of the brain's full MapState at this frame. Optional/default-None so the GIF
+    # path (which only reads posterior/drones/sectors) is unaffected; the live dashboard server
+    # uses it to project the side panels per frame. Captured in record() via brain.map_state().
+    map_state: Optional["MapState"] = None
 
 
 @dataclass
@@ -302,6 +306,7 @@ def _run_closed_loop(cfg: BrainConfig, seed: int, n_drones: int, max_obs: int) -
             update_count=w.brain.update_count, posterior=w.brain.posterior.copy(), drones=views,
             ranked_sectors=ranked, caption=caption, status=w.brain.status.value,
             p_out=w.brain.p_out, located_now=located["event"] is not None,
+            map_state=w.brain.map_state(),   # full read-model snapshot for the live dashboard panels
         ))
 
     record(f"PRIOR — {n_drones} drone(s), sectors ranked by probability-of-area (POA)")
@@ -372,7 +377,7 @@ def _relabel(frame: PlannerFrame, caption: str) -> PlannerFrame:
     return PlannerFrame(
         update_count=frame.update_count, posterior=frame.posterior, drones=frame.drones,
         ranked_sectors=frame.ranked_sectors, caption=caption, status=frame.status,
-        p_out=frame.p_out, located_now=frame.located_now,
+        p_out=frame.p_out, located_now=frame.located_now, map_state=frame.map_state,
     )
 
 
