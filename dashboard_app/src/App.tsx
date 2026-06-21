@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import TopBar from './components/TopBar'
 import StatusBar from './components/StatusBar'
 import MissionSidebar from './components/MissionSidebar'
@@ -23,11 +23,6 @@ export default function App() {
 
   const toggleLayer = (id: string) =>
     setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)))
-
-  const layerOn = useMemo(
-    () => Object.fromEntries(layers.map((l) => [l.id, l.enabled])),
-    [layers],
-  )
 
   return (
     <div className="flex h-screen flex-col bg-base-950 text-slate-200">
@@ -58,14 +53,9 @@ export default function App() {
           {/* Middle: map (center) + right rail */}
           <div className="flex min-h-[440px] flex-1 gap-3">
             <div className="flex min-w-0 flex-1 flex-col">
-              <ProbabilityMap
-                state={state}
-                showHeat={layerOn['prob']}
-                showPath={layerOn['path']}
-                showDetections={layerOn['detections']}
-                showSearched={layerOn['searched']}
-                showTerrain={layerOn['terrain']}
-              />
+              {/* The map is now a server-rendered unified base (terrain+posterior+sectors) under
+                  live vector overlays; the sidebar layer toggles are cosmetic for it. */}
+              <ProbabilityMap state={state} />
             </div>
 
             <div className="flex w-[320px] shrink-0 flex-col gap-3">
