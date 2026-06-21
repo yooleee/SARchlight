@@ -26,7 +26,9 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.common.contracts import LocatedEvent
+from src.common.contracts import Cell, LocatedEvent
+from src.search.guide import simulate_guidance
+from src.search.return_path import plan_return_path
 from integration.dashboard_projection import ProjectionContext, project
 from integration.loop import build_showcase_loop
 from integration.terrain_render import render_terrain_png
@@ -34,6 +36,10 @@ from integration.terrain_render import render_terrain_png
 # Seconds between frames. Slow enough to WATCH the map evolve in the demo, fast enough that
 # the ~46-frame run locates in well under a minute. A tunable, not a constant in the math.
 _STEP_INTERVAL_S = float(os.environ.get("SAR_STEP_INTERVAL", "0.7"))
+
+# The guidance sim emits hundreds of fine ticks; we replay this many on the dashboard so the
+# guide-home phase plays out in a watchable time (a display cadence, not a sim change).
+_GUIDE_FRAMES = 36
 
 # Allowed browser origins (the Vite dev server). CORS is required because the dashboard is
 # served from :5173 while this API is on :8000 — a cross-origin fetch the browser blocks by default.
@@ -99,6 +105,14 @@ class LoopRunner:
         self._loop, self.terrain_name = build_showcase_loop()
         self._trend = []
         self._located = None
+        # Guide-home phase state (populated once the search locates). home_cell is known from
+        # the start, so the operators marker can show during the search too.
+        self.guidance_status = "searching"
+        self._guidance_path = None
+        self._home_cell: Cell = self._loop.grid.latlon_to_cell(*self._loop.cfg.lkp_latlon)
+        self._guide_states = []
+        self._guide_i = 0
+        self._guide_drone_cells: list = []
         # Render the terrain backdrop ONCE per run (it's static — the grid is fixed). None if
         # the rasters are absent, in which case /terrain.png 404s and the dashboard falls back
         # to its procedural backdrop. Bytes are immutable, so the endpoint reads them lock-free.
@@ -119,12 +133,21 @@ class LoopRunner:
             history lives here). Called only from the stepper thread, so reading _trend is safe.
         """
         loop = self._loop
+        # During guidance the drone's leading positions extend the flown path, so dronePos
+        # follows the leader and flightPath shows it flying the route home.
+        subject_cell = None
+        if self.guidance_status in ("guiding", "arrived") and self._guide_states:
+            subject_cell = self._guide_states[self._guide_i].subject_cell
         return ProjectionContext(
-            drone_path=loop.drone_path,
+            drone_path=list(loop.drone_path) + self._guide_drone_cells,
             last_pose=loop.last_pose,
             trend=list(self._trend),
             located_cell=loop.located_event.cell if loop.located_event else None,
             started_at="live",
+            guidance_path=self._guidance_path,
+            subject_cell=subject_cell,
+            home_cell=self._home_cell,
+            guidance_status=self.guidance_status,
         )
 
     def start(self) -> None:
@@ -142,26 +165,87 @@ class LoopRunner:
 
     def _run(self) -> None:
         """
-        The single-writer loop: step, project, publish — once per interval until done.
+        The single-writer loop: advance ONE phase-step, then wait — until the run is finished.
 
         Why:
-            This is the ONLY place the brain advances. It computes the fresh projection, then
-            records the current confidence into the trend for the NEXT projection (a one-frame
-            lag, invisible in the chart) and latches the LocatedEvent the first time it fires.
+            This is the ONLY place state advances. It runs two phases in sequence: the SEARCH
+            loop (detector->geo->brain) until it's done, then — if it located — the GUIDE-HOME
+            phase (drone leads the subject home). One thread, one writer, across both phases.
         """
         while not self._stop.is_set():
-            if not self._loop.is_done:
-                result = self._loop.step()
-                if result is not None:
-                    map_state, event = result
-                    ui = project(map_state, self._context())
-                    with self._lock:
-                        self._state_dict = ui
-                        self._trend.append((map_state.timestamp, ui["confidenceToDeclare"]))
-                        if event is not None and self._located is None:
-                            self._located = _located_to_dict(event)
+            self._advance()
             # Wait on the stop event (not time.sleep) so shutdown is responsive mid-interval.
             self._stop.wait(_STEP_INTERVAL_S)
+
+    def _advance(self) -> None:
+        """
+        Advance the run by one step of the current phase (search, then guide-home).
+
+        Why:
+            Splitting the per-tick logic out of the wait loop keeps each phase legible: step the
+            search until done; on the first done-and-located tick build the route + guidance;
+            then replay the guidance frames until the subject arrives; then idle.
+        """
+        loop = self._loop
+        if not loop.is_done:
+            result = loop.step()                       # SEARCH phase
+            if result is not None:
+                map_state, event = result
+                ui = project(map_state, self._context())
+                with self._lock:
+                    self._state_dict = ui
+                    self._trend.append((map_state.timestamp, ui["confidenceToDeclare"]))
+                    if event is not None and self._located is None:
+                        self._located = _located_to_dict(event)
+        elif self.guidance_status == "searching" and loop.located_event is not None:
+            self._build_guidance()                     # transition: plan the route home
+            self._publish_guidance()
+        elif self.guidance_status == "guiding":         # GUIDE-HOME phase
+            if self._guide_i < len(self._guide_states) - 1:
+                self._guide_i += 1
+            else:
+                self.guidance_status = "arrived"
+            self._publish_guidance()
+        # else: arrived, or never located -> nothing left to advance (idle).
+
+    def _build_guidance(self) -> None:
+        """
+        Plan the terrain-aware route home and simulate the guidance, ready to replay.
+
+        Why:
+            Built once at the search->guide transition: the route the located subject walks back
+            to the operators, and the leader/follower positions per tick. Down-sampled to
+            _GUIDE_FRAMES so the dashboard plays it out in a watchable time.
+        """
+        loop = self._loop
+        subject = loop.subject_cell
+        path = plan_return_path(loop.grid, loop.terrain, subject, self._home_cell, cfg=loop.cfg)
+        guidance = simulate_guidance(loop.grid, loop.terrain, path)
+        states = guidance.states
+        if len(states) > _GUIDE_FRAMES:
+            stride = max(1, len(states) // _GUIDE_FRAMES)
+            sampled = states[::stride]
+            if sampled[-1] is not states[-1]:
+                sampled.append(states[-1])
+            states = sampled
+        self._guidance_path = path
+        self._guide_states = states
+        self._guide_i = 0
+        self._guide_drone_cells = []
+        self.guidance_status = "guiding"
+
+    def _publish_guidance(self) -> None:
+        """
+        Publish the projection for the current guidance frame (drone leading, subject following).
+
+        Why:
+            Appends the drone's current lead position to the flown path (so dronePos follows the
+            leader and flightPath shows it flying the route), then republishes under the lock.
+        """
+        st = self._guide_states[self._guide_i]
+        self._guide_drone_cells.append(st.drone_cell)
+        with self._lock:
+            self._state_dict = project(self._loop.brain.map_state(), self._context())
 
     # --- read model (lock-guarded; called from request handlers) ---
 
@@ -188,6 +272,7 @@ class LoopRunner:
             "n_frames": loop.n_frames,
             "done": loop.is_done,
             "located": self._located is not None,
+            "guidance_status": self.guidance_status,
             "terrain": self.terrain_name,
             "step_interval_s": _STEP_INTERVAL_S,
         }

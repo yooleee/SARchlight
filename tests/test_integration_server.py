@@ -83,6 +83,34 @@ def test_server_steps_loop_to_locate(monkeypatch):
         assert state["stats"]["personsFound"] == 1
 
 
+def test_server_runs_through_guidance_to_arrived(monkeypatch):
+    """
+    Scenario: run the server flat-out and poll until the guide-home phase reports 'arrived'.
+    Why it matters: this is the new act-2 path end to end through HTTP — after locating, the
+    server plans the route, replays the guidance, and /state exposes the route + the moving
+    subject + the operators, finishing 'arrived' with a completed Guide Home ribbon step.
+    """
+    monkeypatch.setattr(server, "_STEP_INTERVAL_S", 0.0)
+
+    with TestClient(server.app) as client:
+        client.post("/reset")
+
+        deadline = time.time() + 20.0
+        health = client.get("/health").json()
+        while health["guidance_status"] != "arrived" and time.time() < deadline:
+            time.sleep(0.05)
+            health = client.get("/health").json()
+
+        assert health["guidance_status"] == "arrived", f"did not reach arrived: {health}"
+
+        state = client.get("/state").json()
+        assert state["guidanceStatus"] == "arrived"
+        assert state["guidancePath"] and len(state["guidancePath"]) >= 2
+        assert state["subjectPos"] is not None and state["operatorPos"] is not None
+        guide_step = next(s for s in state["loop"] if s["label"] == "Guide Home")
+        assert guide_step["status"] == "done"
+
+
 @pytest.mark.skipif(not pathlib.Path(_DEFAULT_DEM).exists(), reason="real DEM raster not present")
 def test_terrain_endpoint_serves_png():
     """

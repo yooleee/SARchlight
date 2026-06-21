@@ -99,6 +99,7 @@ class SearchLoop:
             brain's prior does, so coverage clearing and the prior agree on the ground truth.
         """
         self.cfg = cfg
+        self.terrain = terrain  # kept so consumers (e.g. the guide-home phase) can reuse it
         self.grid: GridSpec = GridSpec.from_config(cfg)
         self.brain = SearchBrain(cfg, terrain)
         # Same terrain -> same visibility the prior used; geo clears what the prior weighted.
