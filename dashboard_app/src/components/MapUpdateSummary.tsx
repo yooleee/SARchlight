@@ -43,11 +43,8 @@ export default function MapUpdateSummary({ lastUpdate }: { lastUpdate: string })
         ))}
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+      <div className="mt-3 flex items-center border-t border-white/5 pt-2">
         <span className="text-[11px] text-slate-500">Last Update: {lastUpdate}</span>
-        <button className="rounded-md bg-base-700/70 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-base-600">
-          View Update Details
-        </button>
       </div>
     </div>
   )

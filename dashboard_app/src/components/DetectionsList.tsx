@@ -16,10 +16,6 @@ export default function DetectionsList({ detections }: { detections: Detection[]
           <Row key={d.id} d={d} />
         ))}
       </div>
-
-      <button className="m-2 rounded-lg bg-base-700/70 py-2 text-[12px] font-medium text-slate-200 hover:bg-base-600">
-        View all detections
-      </button>
     </div>
   )
 }

@@ -15,7 +15,8 @@ import { useMapState } from './hooks/useMapState'
 
 export default function App() {
   // Live MapState from the brain's integration server (falls back to mockState when offline).
-  const state = useMapState()
+  // `live` is false when the integration server is unreachable, so the map can flag demo data.
+  const { state, live } = useMapState()
 
   // Local copy so layer toggles are interactive (dashboard reads state; toggles are view-only).
   // Seeded once from the first state; the layer list is static, so polling never clobbers a toggle.
@@ -55,7 +56,7 @@ export default function App() {
             <div className="flex min-w-0 flex-1 flex-col">
               {/* The map is now a server-rendered unified base (terrain+posterior+sectors) under
                   live vector overlays; the sidebar layer toggles are cosmetic for it. */}
-              <ProbabilityMap state={state} />
+              <ProbabilityMap state={state} live={live} />
             </div>
 
             <div className="flex w-[320px] shrink-0 flex-col gap-3">

@@ -1,4 +1,5 @@
-import { Plus, Minus, Layers, Navigation, Home } from 'lucide-react'
+import { useState } from 'react'
+import { Navigation, Home, WifiOff } from 'lucide-react'
 import type { MapState } from '../types'
 import { API_BASE } from '../lib/api'
 
@@ -9,9 +10,11 @@ import { API_BASE } from '../lib/api'
 
 interface Props {
   state: MapState
+  // False when the integration server is unreachable (the map is showing demo data, not a live search).
+  live: boolean
 }
 
-export default function ProbabilityMap({ state }: Props) {
+export default function ProbabilityMap({ state, live }: Props) {
   const guiding = state.guidanceStatus === 'guiding' || state.guidanceStatus === 'arrived'
   const drones = state.drones ?? []
 
@@ -20,6 +23,15 @@ export default function ProbabilityMap({ state }: Props) {
     pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x * 100} ${p.y * 100}`).join(' ')
 
   const guidanceD = state.guidancePath && state.guidancePath.length ? toPath(state.guidancePath) : ''
+
+  // Double-buffer the per-frame base image to kill the inter-frame flash. The base map is a
+  // server-rendered PNG fetched fresh each frame (?v=frame); naively swapping the <img> src
+  // leaves a visible gap while the new PNG downloads + decodes. Instead we keep showing the
+  // current frame (`shownSrc`) and load the incoming frame in a hidden <img>; only when THAT
+  // finishes (onLoad) do we promote it. The visible swap is then to an already-decoded image,
+  // so the animation is smooth instead of a slideshow.
+  const baseSrc = `${API_BASE}/map_base.png?v=${state.frame ?? 0}`
+  const [shownSrc, setShownSrc] = useState(baseSrc)
 
   return (
     <div className="panel relative flex-1 overflow-hidden bg-base-950">
@@ -30,14 +42,25 @@ export default function ProbabilityMap({ state }: Props) {
       <div className="absolute inset-0 grid place-items-center">
         <div className="relative aspect-square h-full max-w-full">
           {/* The unified base image: terrain + posterior + sectors, rendered server-side per frame,
-              keyed to state.frame. A square image in a square box -> no stretch. */}
+              keyed to state.frame. A square image in a square box -> no stretch. `shownSrc` is the
+              last FULLY-LOADED frame, so the visible image never blanks mid-swap. */}
           <img
-            src={`${API_BASE}/map_base.png?v=${state.frame ?? 0}`}
+            src={shownSrc}
             alt=""
             draggable={false}
             decoding="async"
             className="absolute inset-0 h-full w-full"
           />
+          {/* Hidden preloader for the incoming frame: promote it to visible only once decoded. */}
+          {baseSrc !== shownSrc && (
+            <img
+              src={baseSrc}
+              alt=""
+              aria-hidden
+              className="hidden"
+              onLoad={() => setShownSrc(baseSrc)}
+            />
+          )}
 
       {/* Vector overlays (trails + route + tether). */}
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
@@ -136,12 +159,14 @@ export default function ProbabilityMap({ state }: Props) {
         <span className="text-accent-red">N</span>
       </div>
 
-      {/* Zoom + layers controls */}
-      <div className="absolute right-3 top-16 flex flex-col gap-1.5">
-        <CtrlBtn><Plus className="h-4 w-4" /></CtrlBtn>
-        <CtrlBtn><Minus className="h-4 w-4" /></CtrlBtn>
-        <CtrlBtn><Layers className="h-4 w-4" /></CtrlBtn>
-      </div>
+      {/* Offline flag: shown when the integration server is unreachable, so the bundled demo
+          (mock) data the dashboard falls back to isn't mistaken for a live search. */}
+      {!live && (
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md bg-accent-amber/15 px-2 py-1 text-[10px] font-semibold text-accent-amber ring-1 ring-accent-amber/30">
+          <WifiOff className="h-3 w-3" />
+          Search server offline — demo data
+        </div>
+      )}
 
       {/* Legend */}
       <div className="absolute bottom-3 right-3 space-y-1 rounded-lg bg-base-900/85 p-2.5 text-[10px] text-slate-300 ring-1 ring-white/10">
@@ -163,14 +188,6 @@ export default function ProbabilityMap({ state }: Props) {
         </div>
       </div>
     </div>
-  )
-}
-
-function CtrlBtn({ children }: { children: React.ReactNode }) {
-  return (
-    <button className="grid h-8 w-8 place-items-center rounded-md bg-base-900/80 text-slate-300 ring-1 ring-white/10 hover:bg-base-700">
-      {children}
-    </button>
   )
 }
 

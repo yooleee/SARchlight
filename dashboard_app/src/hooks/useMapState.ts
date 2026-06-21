@@ -30,12 +30,17 @@ const POLL_MS = 1000
  * fetch error we simply keep the last good value (which starts as the mock), so an offline
  * server degrades to the static demo instead of an empty screen.
  *
- * @returns The most recent MapState — live data once the server responds, else the mock.
+ * @returns `{ state, live }` — the most recent MapState (live data once the server responds,
+ *   else the mock), and `live`: whether the most recent poll actually reached the brain. The
+ *   UI uses `live` to flag when the map is showing demo data instead of a real search.
  */
-export function useMapState(): MapState {
+export function useMapState(): { state: MapState; live: boolean } {
   // Start from the mock so the very first render is a complete, valid dashboard even before
   // the first successful poll (or with no server at all).
   const [state, setState] = useState<MapState>(mockState)
+  // Optimistic: assume connected so a healthy server never flashes an "offline" badge during
+  // the first poll; it flips to false only when a poll actually fails.
+  const [live, setLive] = useState(true)
 
   useEffect(() => {
     // `active` guards against a late fetch resolving after the component unmounts.
@@ -44,14 +49,19 @@ export function useMapState(): MapState {
     const poll = async () => {
       try {
         const res = await fetch(`${API_BASE}/state`)
-        if (!res.ok) return // transient server error -> keep last good state
+        if (!res.ok) {
+          if (active) setLive(false) // server reachable but erroring -> treat as not live
+          return // keep last good state
+        }
         const data = (await res.json()) as MapState
         // Guard against an empty/garbage body overwriting a good state.
         if (active && data && Object.keys(data).length > 0) {
           setState(data)
+          setLive(true)
         }
       } catch {
         // Network error / server down -> stay on the last good state (mock fallback).
+        if (active) setLive(false)
       }
     }
 
@@ -63,5 +73,5 @@ export function useMapState(): MapState {
     }
   }, [])
 
-  return state
+  return { state, live }
 }
