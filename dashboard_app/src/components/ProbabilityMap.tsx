@@ -140,16 +140,26 @@ export default function ProbabilityMap({
           />
         )}
 
-        {/* Guide-home: the planned walkable route back to the operators (green dashed). */}
+        {/* Guide-home: the planned walkable route back to the operators (green dashed, with a
+            dark casing underneath so it reads over the bright heatmap). */}
         {guiding && guidanceD && (
-          <path
-            d={guidanceD}
-            fill="none"
-            stroke="#7CFC00"
-            strokeWidth={0.6}
-            strokeDasharray="1.6 1.2"
-            vectorEffect="non-scaling-stroke"
-          />
+          <>
+            <path
+              d={guidanceD}
+              fill="none"
+              stroke="rgba(0,0,0,0.55)"
+              strokeWidth={1.4}
+              vectorEffect="non-scaling-stroke"
+            />
+            <path
+              d={guidanceD}
+              fill="none"
+              stroke="#7CFC00"
+              strokeWidth={0.7}
+              strokeDasharray="1.6 1.2"
+              vectorEffect="non-scaling-stroke"
+            />
+          </>
         )}
 
         {/* Line-of-sight tether: the subject (follower) to the drone (leader = dronePos). */}
@@ -188,16 +198,20 @@ export default function ProbabilityMap({
             style={{ left: `${state.subjectPos.x * 100}%`, top: `${state.subjectPos.y * 100}%` }}
             title="subject (following)"
           >
-            <span className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-red/30 animate-pulseRing" />
-            <div className="relative h-3.5 w-3.5 rounded-full bg-accent-red ring-2 ring-white/80" />
+            {/* White-centered so it stays visible ON TOP of the red heatmap glow it sits in. */}
+            <span className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40 animate-pulseRing" />
+            <div className="relative grid h-4 w-4 place-items-center rounded-full bg-white ring-[3px] ring-accent-red shadow-[0_0_0_1.5px_rgba(0,0,0,0.65)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent-red" />
+            </div>
           </div>
         )}
 
-        {showSearched &&
+        {/* Search-phase waypoints declutter during guide-home so the route home reads cleanly. */}
+        {showSearched && !guiding &&
           state.waypoints
             .filter((w) => w.kind === 'searched')
             .map((w) => <Marker key={w.id} x={w.pos.x} y={w.pos.y} kind="searched" />)}
-        {showDetections &&
+        {showDetections && !guiding &&
           state.waypoints
             .filter((w) => w.kind === 'detection')
             .map((w) => <Marker key={w.id} x={w.pos.x} y={w.pos.y} kind="detection" />)}
