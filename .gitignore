@@ -16,6 +16,19 @@
 .agents/
 skills-lock.json
 
+# --- Internal build/planning docs (kept locally, not in the public repo) ---
+/CLAUDE.md
+/kickoff.md
+/prep/
+/docs/build_plan.md
+/docs/integration-kickoff.md
+/docs/showcase-kickoff.md
+/docs/tech_and_sponsors.md
+/docs/SAR_project_plan.md
+/docs/brain_followups.md
+/docs/demo_scenario.md
+/docs/geo_detector_integration.md
+
 # --- Gathered data (large; tracked by structure only, not contents) ---
 data/terrain/*
 data/detection/*
