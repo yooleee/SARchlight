@@ -27,9 +27,16 @@ tests/         unit tests for the update, prior, and trigger + a brain integrati
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 
-.venv/bin/python -m pytest          # run the test suite
-.venv/bin/python -m src.demo.run    # run the demo -> console beats + PNGs in demo_output/
+.venv/bin/python -m pytest                       # run the test suite
+.venv/bin/python -m src.demo.run                 # demo on synthetic terrain (locates) -> demo_output/
+.venv/bin/python -m src.demo.run --real-terrain  # same, on the real DEM+WorldCover Marin prior
 ```
+
+The pipeline is `scripted CameraPose → detector simulator → GeoReferencer → brain`. The
+detector is **simulated** (we have no aerial footage); geo and the brain are the real code.
+`RasterTerrain` builds the prior + visibility from the real rasters; the demo's scenario is
+tuned for the synthetic stub, so `--real-terrain` shows the real Marin prior but may not
+locate (see `docs/brain_followups.md`).
 
 The demo drives the loop through the `docs/demo_scenario.md` sequence: the prior blooms
 SW down the drainage from the last-known position, a sweep clears the corridor, color

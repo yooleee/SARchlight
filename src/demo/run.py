@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import math
 import pathlib
@@ -36,6 +37,7 @@ from src.common.grid import GridSpec
 from src.geo.georeferencer import GeoReferencer, _pixel_to_ground_local
 from src.search.brain import SearchBrain
 from src.search.terrain import SyntheticTerrain
+from src.search.terrain_raster import RasterTerrain
 from src.search.trigger import concentration_ratio, windowed_mass
 from src.demo.detector_sim import DetectorSimulator
 from src.demo.mock_stream import build_scripted_path
@@ -245,20 +247,37 @@ def _print_feasibility(subject, event, geo_errors_m, subject_hits, false_positiv
     print("=" * 72)
 
 
-def main() -> None:
+def main(use_real_terrain: bool = False) -> None:
     """
     Run the full chain (scripted pose -> simulator -> geo -> brain) and write PNGs.
 
+    Args:
+        use_real_terrain: If True, build the prior + visibility from the real DEM +
+            WorldCover rasters (RasterTerrain) instead of the synthetic stub. The demo's
+            scenario (subject placement, flight path, threshold) is tuned for SYNTHETIC
+            terrain, so on real terrain it shows the real Marin prior but may not locate
+            (the region is densely forested — see docs/brain_followups.md). Falls back to
+            synthetic if the rasters are absent.
+
     Why:
-        One command (`python -m src.demo.run`) that proves the geo+brain integration:
-        the subject's map cell EMERGES from projection, and the feasibility report
-        states geo's error and the locate outcome.
+        One command (`python -m src.demo.run [--real-terrain]`) that proves the geo+brain
+        integration: the subject's cell EMERGES from projection, and the feasibility
+        report states geo's error and the locate outcome.
     """
     logging.basicConfig(level=logging.WARNING, format="  [warn] %(name)s: %(message)s")
     _OUTPUT_DIR.mkdir(exist_ok=True)
     cfg = DEMO_CONFIG
     grid = GridSpec.from_config(cfg)
-    terrain = SyntheticTerrain(cfg)
+
+    if use_real_terrain:
+        try:
+            terrain = RasterTerrain(cfg)
+            terrain_name = "REAL rasters (DEM + WorldCover)"
+        except FileNotFoundError as exc:
+            print(f"[!] {exc}\n[!] falling back to synthetic terrain")
+            terrain, terrain_name = SyntheticTerrain(cfg), "synthetic (raster fallback)"
+    else:
+        terrain, terrain_name = SyntheticTerrain(cfg), "synthetic"
     brain = SearchBrain(cfg, terrain)
 
     subject_latlon, frames = build_scripted_path(grid, cfg)
@@ -274,7 +293,8 @@ def main() -> None:
 
     print(f"Demo grid {grid.n_rows}x{grid.n_cols} @ {cfg.cell_size_m:.0f} m | "
           f"LKP {grid.latlon_to_cell(*cfg.lkp_latlon)} | subject {subject} | "
-          f"{len(frames)} frames ({n_sweep} sweep)  [detector SIMULATED; geo + brain real]\n")
+          f"{len(frames)} frames ({n_sweep} sweep)\n"
+          f"terrain: {terrain_name}  [detector SIMULATED; geo + brain real]\n")
 
     drone_path: list = []
     located_event: Optional[LocatedEvent] = None
@@ -330,4 +350,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run the SAR geo+brain demo.")
+    parser.add_argument(
+        "--real-terrain", action="store_true",
+        help="build the prior + visibility from the real DEM/WorldCover rasters "
+             "(shows real Marin terrain; the synthetic-tuned scenario may not locate)",
+    )
+    args = parser.parse_args()
+    main(use_real_terrain=args.real_terrain)

@@ -69,6 +69,21 @@ the current design (state these out loud; don't let a demo imply otherwise).
   invariant: an extreme peak holding most of the map's mass still scales with grid size.
   For normal localized finds this is fine; it is called out so the claim isn't overstated.
 
+### B5. Real terrain makes the find harder — demo scenario needs re-design
+- **Status:** `RasterTerrain` (real DEM + WorldCover) is built and tested (Geo Unit 5) and
+  the demo can run on it via `python -m src.demo.run --real-terrain`. But the demo's
+  scenario (subject placement, scripted flight path, threshold) is tuned for the SYNTHETIC
+  stub, and on **real** terrain it does **not** reliably locate.
+- **Why:** the AOI is ~72% dense tree canopy, so a realistic subject has low visibility
+  (~0.4 → ~40% detection, marginal persistence), AND a realistic subject sits at ~average
+  prior, so its concentration (~3x) overlaps with false positives (~3.5x). The synthetic
+  demo hid this by placing the subject in a favorable corridor at above-average prior.
+- **What's needed (folded into the advanced-demo work):** relocate the subject to a
+  findable real cell, redirect the flight path to match, make thermal detection effective
+  under canopy (defensible for the dusk scenario), and recalibrate the threshold. This is
+  scenario design, which overlaps the planned advanced visual demo — see that effort.
+- **Default stays synthetic** so the demo locates reliably out of the box.
+
 ### B4. Georeferencing fidelity & real terrain (separate tracks, not the brain)
 - The prior uses a **synthetic** terrain stub (a hand-shaped ridge + drainage) and
   **Euclidean** distance from the LKP. Real DEM/land-cover/OSM rasters and a Tobler
