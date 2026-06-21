@@ -201,3 +201,19 @@ visible loop runs end-to-end and locates today. What is **deliberately approxima
 - **Voice is Milestone 2 (not built).** `recentCommands` is empty and the vendored `voice/`
   telephony agent is untouched. Plan: TTS the `LocatedEvent` broadcast line into the dashboard
   first; the full Deepgram/Twilio agent is strictly gated on everything else working.
+
+### Real-terrain dashboard backdrop (built)
+
+The dashboard now renders the **real Marin terrain** behind the heatmap (muted colorized shaded
+relief), so the map is grounded in the actual region rather than a procedural texture. The server
+runs the **showcase scenario** (`build_showcase_loop` — real DEM/WorldCover, NW subject, locates at
+0 m) and serves the backdrop at `GET /terrain.png` (`integration/terrain_render.py`, reusing
+`showcase.hillshade`). Limitations / choices:
+- **Muted/darkened on purpose.** Elevation tint is desaturated and the whole backdrop darkened so
+  the screen-blended heatmap stays the focus (verified by compositing). The bright Mt. Tam summit
+  and the flat east-edge band (AOI extends past the DEM) are honest artifacts; the heat never lands
+  there.
+- **Backdrop is static per run**, rendered once and cached; aligned to the grid frame by
+  construction (no reprojection — the same reason the hillshade route was chosen over contextily,
+  see C2 above). If the rasters are absent the endpoint 404s and the dashboard falls back to its
+  procedural backdrop.
