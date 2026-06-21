@@ -1,9 +1,0 @@
-# Main thermal SAR config.
-# Place WiSARD thermal frames in YOLO format under this path.
-path: ../../data/processed/wizard_thermal_person
-train: images/train
-val: images/val
-test: images/test
-
-names:
-  0: person

@@ -1,9 +1,0 @@
-# Main RGB SAR config.
-# Place WiSARD RGB frames in YOLO format under this path.
-path: ../../data/processed/wizard_rgb_person
-train: images/train
-val: images/val
-test: images/test
-
-names:
-  0: person
