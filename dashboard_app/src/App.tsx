@@ -54,9 +54,9 @@ export default function App() {
           {/* Middle: map (center) + right rail */}
           <div className="flex min-h-[440px] flex-1 gap-3">
             <div className="flex min-w-0 flex-1 flex-col">
-              {/* The map is now a server-rendered unified base (terrain+posterior+sectors) under
-                  live vector overlays; the sidebar layer toggles are cosmetic for it. */}
-              <ProbabilityMap state={state} live={live} />
+              {/* DEMO MODE: the map shows a pre-rendered 3-drone search + guide-home gif instead
+                  of the live server-rendered map; the sidebar layer toggles are cosmetic for it. */}
+              <ProbabilityMap live={live} />
             </div>
 
             {/* Right rail widened (the map is a centered square now, so it freed up horizontal
