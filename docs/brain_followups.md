@@ -104,7 +104,7 @@ the current design (state these out loud; don't let a demo imply otherwise).
 
 ---
 
-## C. Post-demo enhancements (designed, not built)
+## C. Post-demo enhancements (C1 built; C2 designed, not built)
 
 ### C1. Sectorized "grid search" + multi-drone coordination
 A search-planning layer that divides the area into coarse **segments** and tasks search by
@@ -132,10 +132,27 @@ located trigger, or the single-writer `MapState`.
   (no overlap)** and **operator legibility** (named, assignable sectors), not single-drone speed.
 - **Invariants preserved:** single-writer `MapState`, fine-grained Bayesian belief, the located
   trigger. The new logic is a consumer/producer around the map, not a rewrite of it.
-- **Status:** QUEUED — post-demo, **before the final hackathon showcase**. Committed next step
-  (not just a someday-maybe): build the sectorized grid search + multi-drone layer after this
-  showcase and before the end-of-event project showcase. Captured here so the design intent
-  isn't lost.
+- **Status:** ✅ BUILT (`src/search/planner.py`, `src/demo/search_demo.py`). All the framing
+  above held as designed. As-built notes:
+  - `SectorPlanner` is a **pure, read-only** search director: `SectorGrid` (coarse overlay, human
+    names A1/C4), `sector_poa` (POA = Σ posterior; priority = POA × (1 − mean coverage), vectorized
+    via `np.add.reduceat`), `rank_sectors`, `plan_single` (boustrophedon sweep), `assign_multi`
+    (disjoint top-sector → nearest-free-drone, locked).
+  - `MapState.search_path` (the ratified §6.1 field) is now emitted by the brain — **additively**;
+    `next_target`'s legacy behavior is unchanged.
+  - **Closed-loop demo** (`run_single_drone` / `run_multi_drone`, one unified per-tick driver):
+    the flight path **emerges** from the planner — sweep the top-POA sector → re-rank → advance →
+    locate. Multi-drone runs N streams into the **one** brain (single writer); a per-tick assign
+    guarantees **disjoint** sectors (verified: zero overlap frames across seeds). Locates 0-cell
+    across seeds, single and 3-drone.
+  - Two real findings from running it: edge-inclusive sweep coverage is needed (a subject on a
+    sector boundary is otherwise grazed by one marginal pass), and the demo sweeps with **thermal**
+    (the canopy-penetrating sensor) at a generous floor — detection realism is the showcase's job,
+    this demo's subject is **coordination**.
+  - Run: `python -m src.demo.search_demo [--drones N]`. Tests: `tests/test_planner.py`,
+    `tests/test_search_demo.py`.
+- **Not built (future):** detection-triggered re-balance is modest (the detecting drone confirms
+  in place rather than vectoring a second drone in); fine for the demo.
 
 ### C2. contextily real-map-tiles backdrop (showcase "secondary visual path")
 The real-terrain showcase (`src/demo/showcase.py`) renders the posterior over a **DEM hillshade**

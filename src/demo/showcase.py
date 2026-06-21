@@ -309,6 +309,29 @@ def _caption(fs: "FrameState") -> str:
     return "OVERFLIGHT — loitering over the high-probability slope"
 
 
+def draw_belief_layer(ax, posterior: np.ndarray, hill: np.ndarray) -> None:
+    """
+    Draw the grey hillshade backdrop with the posterior overlaid (graded alpha) onto an axis.
+
+    Args:
+        ax: The matplotlib axis (already cleared by the caller).
+        posterior: (n_rows, n_cols) probability map to overlay.
+        hill: (n_rows, n_cols) hillshade backdrop in [0, 1].
+
+    Why:
+        The hillshade + log-scaled, steeply-graded-alpha posterior is the shared visual base for
+        BOTH the scripted showcase and the C1 closed-loop planner demo, so it lives in one place
+        (DRY). Graded alpha (power 2.5) keeps the cold tail see-through (terrain shows) and the
+        hot find opaque (it pops) — a flat alpha washes this grid's broad tail.
+    """
+    ax.imshow(hill, origin="lower", cmap="gray", vmin=0.0, vmax=1.0)
+    floor = posterior[posterior > 0].min() if np.any(posterior > 0) else 1e-12
+    norm = LogNorm(vmin=floor, vmax=posterior.max())
+    normed = np.asarray(norm(np.maximum(posterior, floor)))      # in [0, 1]
+    alpha = 0.06 + 0.90 * np.clip(normed, 0.0, 1.0) ** 2.5       # see-through cold, opaque hot
+    ax.imshow(np.maximum(posterior, floor), origin="lower", cmap="inferno", norm=norm, alpha=alpha)
+
+
 def render_frame(ax, cfg: BrainConfig, grid: GridSpec, subject: Tuple[int, int],
                  hill: np.ndarray, fs: "FrameState") -> None:
     """
@@ -329,20 +352,7 @@ def render_frame(ax, cfg: BrainConfig, grid: GridSpec, subject: Tuple[int, int],
         legible than a flat half-tint. Reuses _annotate_axis so the markers match run.py.
     """
     ax.clear()
-    # Backdrop: grey shaded relief (origin lower => north-up, matching the posterior).
-    ax.imshow(hill, origin="lower", cmap="gray", vmin=0.0, vmax=1.0)
-
-    # Posterior on a log scale (probabilities span orders of magnitude), with a graded
-    # alpha so low-probability ground stays see-through and the find glows.
-    post = fs.posterior
-    floor = post[post > 0].min() if np.any(post > 0) else 1e-12
-    norm = LogNorm(vmin=floor, vmax=post.max())
-    normed = np.asarray(norm(np.maximum(post, floor)))      # in [0, 1]
-    # Graded alpha with a steep curve (power 2.5): the cold low-probability tail goes
-    # near-transparent so the terrain shows through, while the hot find stays opaque and
-    # pops. A flat or gently-graded alpha washes the whole map at this grid's broad tail.
-    alpha = 0.06 + 0.90 * np.clip(normed, 0.0, 1.0) ** 2.5
-    ax.imshow(np.maximum(post, floor), origin="lower", cmap="inferno", norm=norm, alpha=alpha)
+    draw_belief_layer(ax, fs.posterior, hill)   # hillshade backdrop + posterior (shared)
 
     lkp = grid.latlon_to_cell(*cfg.lkp_latlon)
     _annotate_axis(ax, grid, lkp, subject, fs.drone_path, fs.next_target)

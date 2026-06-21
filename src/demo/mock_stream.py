@@ -118,6 +118,52 @@ def _pose(grid: GridSpec, cell, frame_id, heading, alt, pitch) -> CameraPose:
     )
 
 
+def sweep_pose(grid: GridSpec, cell: Tuple[int, int], frame_id: str, heading: float) -> CameraPose:
+    """
+    A near-nadir COLOR sweep pose centered on `cell` (sweep altitude/pitch).
+
+    Args:
+        grid: The shared GridSpec.
+        cell: The (row, col) the drone is over.
+        frame_id: Stable frame handle.
+        heading: Compass heading (mostly cosmetic at near-nadir; sets the tiny forward shift).
+
+    Returns:
+        A CameraPose at the sweep altitude and pitch.
+
+    Why:
+        The C1 closed-loop demo flies planner-chosen waypoints; reusing the same sweep
+        altitude/pitch constants the scripted path uses keeps the footprint (and thus the
+        clearing behaviour) identical between the scripted showcase and the closed loop. (DRY.)
+    """
+    return _pose(grid, cell, frame_id, heading, _SWEEP_ALT_M, _SWEEP_PITCH)
+
+
+def loiter_pose(
+    grid: GridSpec, cell: Tuple[int, int], frame_id: str, heading: float, sensor_type: SensorType
+) -> CameraPose:
+    """
+    A lower-altitude overflight pose for CONFIRMING a detection (color or thermal pitch).
+
+    Args:
+        grid: The shared GridSpec.
+        cell: The (row, col) to loiter over (the detection cell).
+        frame_id: Stable frame handle.
+        heading: Compass heading.
+        sensor_type: COLOR or THERMAL (selects the overflight pitch).
+
+    Returns:
+        A CameraPose at the descend-for-detail altitude and the sensor's overflight pitch.
+
+    Why:
+        On a sweep detection the closed loop loiters to build persistence (and run the thermal
+        pass that corroborates under canopy) — the same overflight geometry the scripted
+        showcase uses, exposed so the closed loop reuses it rather than re-deriving constants.
+    """
+    pitch = _THERMAL_PITCH if sensor_type == SensorType.THERMAL else _COLOR_PITCH
+    return _pose(grid, cell, frame_id, heading, _SUBJECT_ALT_M, pitch)
+
+
 def build_scripted_path(
     grid: GridSpec, cfg: BrainConfig, offset: Optional[Tuple[int, int]] = None
 ) -> Tuple[Tuple[float, float], List[ScriptedFrame]]:

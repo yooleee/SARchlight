@@ -25,12 +25,15 @@ The **brain + GeoReferencer + terrain** track is **built, tested, and committed*
 (DEM + WorldCover), a detector *simulator*, the closed loop end-to-end, and the **real-terrain
 animated showcase** (`src/demo/showcase.py` → `demo_output/showcase.gif`; locates on real Marin
 terrain at 0-cell error — closed `brain_followups.md` B5). Run the synthetic demo with
-`python -m src.demo.run`, the showcase with `python -m src.demo.showcase`, and the suite with
-`pytest` (101 tests). Still **teammates' tracks / not built in this repo**: the dashboard, the
-voice/broadcast, and the real YOLO11+SAHI detector. Next planned work is **C1 — sectorized
-grid-search + multi-drone** (committed before the final hackathon showcase; design in
-`docs/brain_followups.md` C1). Deferred items and honest limitations live in
-**`docs/brain_followups.md`**.
+`python -m src.demo.run`, the showcase with `python -m src.demo.showcase`, the **closed-loop
+sector search** (C1) with `python -m src.demo.search_demo [--drones N]`, and the suite with
+`pytest` (121 tests). The **C1 sectorized grid-search + multi-drone** layer is now **built**
+(`src/search/planner.py`, `src/demo/search_demo.py`): a pure read-only sector planner (POA
+ranking, single-drone boustrophedon, disjoint multi-drone assignment) feeding the one
+single-writer brain; the closed-loop flight path *emerges* from the planner. Still **teammates'
+tracks / not built in this repo**: the dashboard, the voice/broadcast, and the real YOLO11+SAHI
+detector. Next planned work is **integrating teammates' code** into the brain track. Deferred
+items and honest limitations live in **`docs/brain_followups.md`**.
 
 ---
 

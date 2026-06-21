@@ -29,6 +29,7 @@ from src.common.contracts import (
     Status,
 )
 from src.common.grid import GridSpec
+from src.search.planner import SectorPlanner
 from src.search.prior import build_prior, rank_top_cells
 from src.search.terrain import TerrainProvider
 from src.search.trigger import BlobTracker
@@ -70,6 +71,10 @@ class SearchBrain:
         self._cfg = cfg
         self._terrain = terrain
         self.grid: GridSpec = GridSpec.from_config(cfg)
+        # The search director (C1): a PURE, read-only sector planner. The brain composes it
+        # to publish the recommended single-drone sweep in MapState.search_path; it never lets
+        # the planner write state, so the single-writer invariant holds.
+        self.planner = SectorPlanner(self.grid, cfg)
 
         # State the brain owns and is the sole writer of.
         self.posterior, self.p_out = build_prior(self.grid, cfg, terrain)
@@ -247,6 +252,11 @@ class SearchBrain:
             snapshot serializable for a later socket/Redis boundary unchanged.
         """
         top_cells = rank_top_cells(self.posterior, k=5)
+        # The recommended single-drone sweep over the top-priority sector (C1). Computed from
+        # the published belief, so consumers (dashboard/operator) see where the director would
+        # send one drone next. The multi-drone assignment is an orchestration layer above this.
+        plan = self.planner.plan_single(self.posterior, self.coverage)
+        search_path = plan.waypoints if plan is not None else None
         return MapState(
             grid_spec=self.grid,
             update_count=self.update_count,
@@ -256,6 +266,7 @@ class SearchBrain:
             top_cells=top_cells,
             next_target=self._next_target(),
             status=self.status,
+            search_path=search_path,
             detections_log=list(self.detections_log),
             p_out=self.p_out,
         )

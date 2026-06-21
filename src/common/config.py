@@ -45,6 +45,18 @@ class BrainConfig:
     # --- Incident / scenario (docs/demo_scenario.md §2) ---
     lkp_latlon: Tuple[float, float] = (37.905, -122.605)  # Pantoll trailhead
 
+    # --- Search planner / sectorization (C1, docs/brain_followups.md C1) ---
+    # The coarse TASKING grid: sectors are `sector_size_cells` x `sector_size_cells` fine
+    # cells (10 x 50 m = 500 m, the SAR-typical sector size). Sectors are used ONLY to rank
+    # and assign search (probability-of-area per sector, multi-drone no-overlap); the
+    # posterior stays 50 m-fine — segmentation never coarsens the belief. Tunable: larger
+    # sectors read more legibly for an operator; smaller ones task more finely.
+    sector_size_cells: int = 10
+    # Boustrophedon swath spacing (fine cells between adjacent sweep passes / waypoints).
+    # ~= the sweep footprint cross-width at the demo altitude, so passes tile a sector with
+    # neither gaps nor heavy overlap. Tunable with the real camera/altitude.
+    swath_spacing_cells: int = 4
+
     # --- Non-detection clearing cap (interfaces §5.5: correlated looks) ---
     # Repeated passes from the SAME sensor over the same canopy/angle miss IDENTICALLY,
     # so the independent-looks product 1-Π(1-d_i) overstates how much one sensor can rule

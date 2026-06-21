@@ -233,6 +233,10 @@ class MapState:
         top_cells: Ranked [(cell, p_i), ...], highest probability first — the
             search targets.
         next_target: The cell the map directs the drone toward next (or None).
+        search_path: The recommended single-drone sweep — an ordered list of cells the
+            search director (the sector planner) lays over the top-priority sector. None
+            until a planner is wired in. The ratified §6.1 `next_target` / `search_path`
+            field; added additively so existing consumers are unaffected.
         status: SEARCHING or LOCATED.
         detections_log: Confirmed detection events for the dashboard timeline.
         p_out: Reserved out-of-region mass; posterior.sum() + p_out == 1.
@@ -251,6 +255,7 @@ class MapState:
     top_cells: List[Tuple[Cell, float]]
     next_target: Optional[Cell]
     status: Status
+    search_path: Optional[List[Cell]] = None
     detections_log: List[Dict[str, Any]] = field(default_factory=list)
     p_out: float = 0.0
 
@@ -281,6 +286,7 @@ class MapState:
             "coverage": self.coverage.tolist(),
             "top_cells": [[list(cell), float(p)] for cell, p in self.top_cells],
             "next_target": list(self.next_target) if self.next_target else None,
+            "search_path": [list(cell) for cell in self.search_path] if self.search_path else None,
             "status": self.status.value,
             "detections_log": self.detections_log,
             "p_out": self.p_out,

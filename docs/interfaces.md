@@ -314,7 +314,7 @@ director. Serializable so it can cross a boundary later unchanged.
 | `posterior` | 2D array [n_rows × n_cols] | Current `p_i` over the grid. The centerpiece the judges watch. |
 | `coverage` | 2D array | Accumulated `cleared_i` (§5.2). The "where have we looked" layer. |
 | `top_cells` | ranked list | Highest-probability cells (with their `p_i`) — the search targets. |
-| `next_target` / `search_path` | cells | Where the map directs the drone next. |
+| `next_target` / `search_path` | cells | Where the map directs the drone next. **Implemented** (C1): `next_target` = the most-likely uncleared cell; `search_path` = the sector planner's recommended single-drone boustrophedon sweep (`src/search/planner.py`). |
 | `status` | enum | `searching` \| `located` \| (extensible). |
 | `detections_log` | list | Confirmed detection events, for the dashboard timeline. |
 
