@@ -90,3 +90,35 @@ the current design (state these out loud; don't let a demo imply otherwise).
   cost-distance are upgrades behind the existing seams (`TerrainProvider`,
   `distance_from_lkp_m`). The GeoReferencer (frame→ground projection) is the next build
   piece; until it exists the brain runs on mock `Observation`s.
+
+---
+
+## C. Post-demo enhancements (designed, not built)
+
+### C1. Sectorized "grid search" + multi-drone coordination
+A search-planning layer that divides the area into coarse **segments** and tasks search by
+each segment's aggregated probability. Important framing: this is **additive — it sits on the
+search-director seam, not inside the Bayesian core.** It does NOT change the update, the
+located trigger, or the single-writer `MapState`.
+
+- **Coarse search grid, fine belief.** Overlay a coarse grid (e.g. 500 m segments = 10×10 of
+  the 50 m probability cells). **The posterior stays fine-grained** — segmentation is a
+  *tasking* overlay only; never coarsen the belief (it throws away information).
+- **Aggregated POA per segment** = Σ posterior over the segment's cells (optionally weighted by
+  `(1 − mean coverage)` so already-searched segments rank lower). Rank segments by POA. This is
+  standard SAR sectorization / probability-of-area practice.
+- **Single drone:** pick the top-POA segment, sweep it (boustrophedon), fold the observations
+  into the map, re-rank, advance. Generalizes today's one-line
+  `next_target = argmax(posterior × (1 − coverage))` (`SearchBrain._next_target`) into a
+  segment-level planner that emits `MapState.search_path / next_target` (interfaces §6.1).
+- **Multi-drone:** assign disjoint top-POA segments to drones (lock a segment to one drone so
+  two drones never cover the same ground at once), and re-balance when a detection flags a
+  segment (a drone diverts/returns). This is a **planner/assignment layer**; the brain just
+  receives N `Observation` streams into the same single-writer state, and the coverage layer
+  already tracks "where we've looked" globally.
+- **Honest note on "efficiency":** for a *single* drone, greedy probability-guided search is
+  already about as efficient as it gets. The grid's real payoff is **multi-drone coordination
+  (no overlap)** and **operator legibility** (named, assignable sectors), not single-drone speed.
+- **Invariants preserved:** single-writer `MapState`, fine-grained Bayesian belief, the located
+  trigger. The new logic is a consumer/producer around the map, not a rewrite of it.
+- **Status:** post-demo. Captured here so the design intent isn't lost.
