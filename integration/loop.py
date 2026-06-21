@@ -127,6 +127,20 @@ class SearchLoop:
         """True once every frame has been played. Why: stop the server's step timer."""
         return self._i >= len(self._frames)
 
+    @property
+    def last_pose(self):
+        """
+        The CameraPose of the most recently played frame, or None before the first step.
+
+        Why:
+            The dashboard's live telemetry (altitude/heading) comes from the current pose,
+            which the brain's MapState doesn't carry. Exposing it here lets the server build
+            the ProjectionContext without re-deriving the flight path it already played.
+        """
+        if self._i == 0:
+            return None
+        return self._frames[self._i - 1].pose
+
     def step(self) -> Optional[Tuple[MapState, Optional[LocatedEvent]]]:
         """
         Advance the loop by exactly one frame.
