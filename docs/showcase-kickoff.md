@@ -11,6 +11,22 @@ teammate's production Streamlit dashboard.
 
 ---
 
+## ✅ BUILT (2026-06-20) — all three parts done
+The real-terrain animated showcase is built and tested (`src/demo/showcase.py`,
+`tests/test_showcase.py`; 101 tests green). Run it: `python -m src.demo.showcase` →
+`demo_output/showcase.gif` (+ `showcase_located.png`). The loop now **locates on real Marin
+terrain at 0-cell error across seeds** (closes `brain_followups.md` B5).
+- **Part 1** — subject relocated NW (`REAL_TERRAIN_SUBJECT_OFFSET`, an offset *seam* so synthetic
+  is untouched), thermal canopy floor (`BrainConfig.thermal_detection_floor`), direction-agnostic
+  sweep, threshold recalibrated (`SHOWCASE_CONFIG.located_concentration_ratio = 3.5`).
+- **Part 2** — DEM **hillshade** backdrop (zero-dep, chosen over `contextily` — see
+  `brain_followups.md` C2 for the deferred tiles route), posterior drawn with a graded alpha.
+- **Part 3** — GIF via direct PIL frames with per-frame durations (dwell on prior + climax).
+
+The notes below are the original kickoff brief, kept for context.
+
+---
+
 ## Where we are
 The brain/geo/terrain track is **built, tested, committed** (branch `brain`): prior + Bayesian
 update + located trigger + single-writer `MapState`, GeoReferencer (projection + boundary

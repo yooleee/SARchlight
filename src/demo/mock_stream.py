@@ -2,8 +2,8 @@
 # mock_stream.py
 # -----------------------------------------------------------------------------
 # Responsible for: The scripted FLIGHT PATH for the demo — an ordered list of
-#                  CameraPose frames (a SW lawnmower sweep, then an overflight of
-#                  the subject), plus the planted ground-truth subject location.
+#                  CameraPose frames (a lawnmower sweep toward the subject, then an
+#                  overflight of it), plus the planted ground-truth subject location.
 # Role in project: Drives the real chain now: scripted pose -> detector simulator
 #                  (detector_sim.py) -> GeoReferencer -> brain. Replaces the old
 #                  direct-Observation mock; the subject's map cell now EMERGES from
@@ -12,21 +12,36 @@
 #                  CameraPose feed a real flight would provide.
 # Assumptions: Near-nadir gimbal; sweep frames are positioned so the subject is NOT
 #              in their footprint (clean non-detections); overflight frames sit over
-#              the subject so it falls in frame.
+#              the subject so it falls in frame. The sweep is DIRECTION-AGNOSTIC: it
+#              flies the band from the LKP toward the subject whichever way that is,
+#              so the same builder serves the synthetic (SW) and real-terrain (NW)
+#              scenarios. A subject due E/W of the LKP gets a thin sweep (acceptable;
+#              both scenarios are diagonal).
 # =============================================================================
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from src.common.config import BrainConfig
 from src.common.contracts import CameraPose, SensorType
 from src.common.grid import GridSpec
 
-# Subject ~1.8 km SW of the LKP (demo_scenario §4): moderate prior, partial canopy.
+# Default (SYNTHETIC) subject: ~1.8 km SW of the LKP (demo_scenario §4): moderate
+# prior, partial canopy. Used when no explicit offset is passed, so the synthetic
+# demo + its regression test are unchanged.
 _SUBJECT_OFFSET_ROWS = -26
 _SUBJECT_OFFSET_COLS = -23
+
+# REAL-TERRAIN subject: (+16, -16) from the LKP = ~1.13 km NW, in tree cover, at
+# ~2.6x the map-mean prior (chosen empirically from the DEM+WorldCover scan — it sits
+# in the forested edge of the NW high-prior zone, NEAR but not ON the prior peak, so
+# the detections must redirect the map onto it). Exported so the showcase + its
+# acceptance test plant the subject at one agreed cell (DRY).
+REAL_TERRAIN_SUBJECT_OFFSET: Tuple[int, int] = (16, -16)
+
 _FRAME_DT_S = 9.0
 
 # Camera/flight constants (plausible drone parameters).
@@ -61,23 +76,32 @@ class ScriptedFrame:
     timestamp: float
 
 
-def subject_cell(grid: GridSpec, cfg: BrainConfig) -> Tuple[int, int]:
+def subject_cell(
+    grid: GridSpec, cfg: BrainConfig, offset: Optional[Tuple[int, int]] = None
+) -> Tuple[int, int]:
     """
-    The subject's true cell, ~1.8 km SW of the LKP near the drainage.
+    The subject's true cell, placed at a (row, col) offset from the LKP.
 
     Args:
         grid: The shared GridSpec.
         cfg: Brain config (for the LKP).
+        offset: (d_row, d_col) cells from the LKP. None -> the synthetic default
+            (~1.8 km SW). The real-terrain showcase passes REAL_TERRAIN_SUBJECT_OFFSET.
 
     Returns:
         (row, col) of the planted subject (ground truth).
 
     Why:
-        Placed (per demo §4) where the prior is MODERATE and the canopy partial, so the
-        update must do real work and the thermal pass earns its corroboration.
+        The offset is a seam, not a hard constant: the synthetic scenario and the
+        real-terrain scenario want the subject in different places (the real prior
+        peaks NW, the synthetic SW), so each passes its own offset instead of one
+        tuning fighting the other. Placed where the prior is MODERATE and the canopy
+        partial, so the update must do real work and the thermal pass earns its
+        corroboration.
     """
+    d_row, d_col = offset if offset is not None else (_SUBJECT_OFFSET_ROWS, _SUBJECT_OFFSET_COLS)
     lkp_r, lkp_c = grid.latlon_to_cell(*cfg.lkp_latlon)
-    return (lkp_r + _SUBJECT_OFFSET_ROWS, lkp_c + _SUBJECT_OFFSET_COLS)
+    return (lkp_r + d_row, lkp_c + d_col)
 
 
 def _pose(grid: GridSpec, cell, frame_id, heading, alt, pitch) -> CameraPose:
@@ -94,41 +118,56 @@ def _pose(grid: GridSpec, cell, frame_id, heading, alt, pitch) -> CameraPose:
     )
 
 
-def build_scripted_path(grid: GridSpec, cfg: BrainConfig) -> Tuple[Tuple[float, float], List[ScriptedFrame]]:
+def build_scripted_path(
+    grid: GridSpec, cfg: BrainConfig, offset: Optional[Tuple[int, int]] = None
+) -> Tuple[Tuple[float, float], List[ScriptedFrame]]:
     """
     Build the scripted flight path and the planted subject location.
 
     Args:
         grid: The shared GridSpec.
         cfg: Brain config (LKP).
+        offset: (d_row, d_col) for the subject relative to the LKP. None -> synthetic
+            default (SW); the showcase passes REAL_TERRAIN_SUBJECT_OFFSET (NW).
 
     Returns:
         (subject_latlon, frames): the ground-truth subject position and the ordered
-        ScriptedFrames — a SW lawnmower sweep (clean), then a subject overflight
-        (color, then thermal).
+        ScriptedFrames — a lawnmower sweep toward the subject (clean), then a subject
+        overflight (color, then thermal).
 
     Why:
-        The path is map-directed: sweep the high-prior corridor (clearing it via clean
-        non-detections), then loiter over the subject's slope. The detector simulator
-        decides per frame whether the subject is in view, so detections EMERGE from the
-        geometry rather than being scripted.
+        The path is map-directed: sweep the band between the LKP and the subject
+        (clearing it via clean non-detections), then loiter over the subject. The sweep
+        flies whichever way the subject lies (SW for synthetic, NW for real terrain), so
+        one builder serves both scenarios. The detector simulator decides per frame
+        whether the subject is in view, so detections EMERGE from the geometry rather
+        than being scripted.
     """
     lkp_r, lkp_c = grid.latlon_to_cell(*cfg.lkp_latlon)
-    subject = subject_cell(grid, cfg)
+    subject = subject_cell(grid, cfg, offset)
     subject_latlon = grid.cell_to_latlon(*subject)
 
     frames: List[ScriptedFrame] = []
     t = 0.0
     frame_no = 1
 
-    # --- Sweep: a boustrophedon over the high-prior corridor band, short of the subject ---
-    row_top = lkp_r + 2
-    row_bottom = subject[0] + 6        # stay clear of the subject's neighborhood
-    col_left = subject[1] - 2
-    col_right = lkp_c + 4
+    # --- Sweep: a boustrophedon over the band from the LKP toward the subject. ---
+    # Travel along ROWS from just behind the LKP to ~6 cells SHORT of the subject (the
+    # buffer keeps the subject out of every sweep footprint -> clean non-detections).
+    # sign_r/sign_c point from the LKP toward the subject; treating a 0 delta as +1
+    # avoids a zero step (a purely-lateral subject then gets a thin sweep, which is fine
+    # for the diagonal scenarios we run). For the SW default this reduces to the old path.
+    d_row, d_col = subject[0] - lkp_r, subject[1] - lkp_c
+    sign_r = 1 if d_row >= 0 else -1
+    row_from = lkp_r - 2 * sign_r            # start just behind the LKP
+    row_to = subject[0] - 6 * sign_r         # stop short of the subject's neighborhood
+    # Columns span the full band between LKP and subject, with a margin each side.
+    col_lo = min(lkp_c, subject[1]) - 3
+    col_hi = max(lkp_c, subject[1]) + 3
+
     serpentine = True
-    for row_c in range(row_top, row_bottom - 1, -4):
-        cols = list(range(col_left, col_right + 1, 5))
+    for row_c in range(row_from, row_to + sign_r, 4 * sign_r):
+        cols = list(range(col_lo, col_hi + 1, 5))
         heading = 90.0 if serpentine else 270.0   # east-going vs west-going pass
         if not serpentine:
             cols = cols[::-1]
@@ -143,10 +182,12 @@ def build_scripted_path(grid: GridSpec, cfg: BrainConfig) -> Tuple[Tuple[float, 
             t += _FRAME_DT_S
 
     # --- Overflight: loiter over the subject. Color first, then a thermal pass. ---
-    heading_down_canyon = 225.0  # SW, following the drainage
-    for _ in range(_COLOR_FRAMES):    # color frames (partial canopy -> some misses expected)
+    # Heading = bearing from the LKP to the subject (0=N, 90=E), so the drone arrives
+    # along the approach direction (SW for synthetic, NW for real terrain).
+    approach_heading = math.degrees(math.atan2(d_col, d_row)) % 360.0
+    for _ in range(_COLOR_FRAMES):    # color frames (canopy -> some misses expected)
         frames.append(ScriptedFrame(
-            pose=_pose(grid, subject, f"F{frame_no:04d}", heading_down_canyon, _SUBJECT_ALT_M, _COLOR_PITCH),
+            pose=_pose(grid, subject, f"F{frame_no:04d}", approach_heading, _SUBJECT_ALT_M, _COLOR_PITCH),
             sensor_type=SensorType.COLOR,
             timestamp=t,
         ))
@@ -154,7 +195,7 @@ def build_scripted_path(grid: GridSpec, cfg: BrainConfig) -> Tuple[Tuple[float, 
         t += _FRAME_DT_S
     for _ in range(_THERMAL_FRAMES):  # thermal corroboration (sees better under canopy)
         frames.append(ScriptedFrame(
-            pose=_pose(grid, subject, f"F{frame_no:04d}", heading_down_canyon, _SUBJECT_ALT_M, _THERMAL_PITCH),
+            pose=_pose(grid, subject, f"F{frame_no:04d}", approach_heading, _SUBJECT_ALT_M, _THERMAL_PITCH),
             sensor_type=SensorType.THERMAL,
             timestamp=t,
         ))

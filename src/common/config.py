@@ -72,6 +72,16 @@ class BrainConfig:
     # as pairs (frozen-friendly); read via visibility_factor_for(). Clamped to [0,1] after.
     visibility_sensor_factor: Tuple[Tuple[str, float], ...] = (("color", 1.0), ("thermal", 1.4))
 
+    # Thermal detection FLOOR for the detector simulator (detector_sim.py), THERMAL only.
+    # Under dense canopy the base visibility is low (~0.40 tree cover), so even thermal's
+    # visibility lift leaves detection marginal. A floor encodes the defensible dusk premise
+    # that body heat penetrates canopy gaps: a thermal pass over a forested subject detects
+    # with at least this probability. Default 0.0 = OFF (no floor) so synthetic-tuned demos
+    # and all existing tests are unchanged; the real-terrain showcase raises it (~0.8) so the
+    # canopy/thermal story actually resolves. Applied to thermal only — color stays gated by
+    # canopy, which keeps the "thermal sees better under canopy" contrast honest.
+    thermal_detection_floor: float = 0.0
+
     # --- Detection update: clipped, bucketed likelihood ratio (interfaces §5.3) ---
     lr_max: float = 20.0
     # Bucketed LR(c): (min_confidence, LR). The highest bucket whose threshold is

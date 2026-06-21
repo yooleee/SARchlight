@@ -22,11 +22,15 @@ contracts in `docs/interfaces.md`; protect the core loop above all else (see bel
 The **brain + GeoReferencer + terrain** track is **built, tested, and committed** (branch
 `brain`): the probability map (prior, Bayesian update, `located` trigger, single-writer
 `MapState`), the GeoReferencer (frame→ground projection + input hardening), real-raster terrain
-(DEM + WorldCover), a detector *simulator*, and the closed loop end-to-end. Run the demo with
-`python -m src.demo.run` and the suite with `pytest`. Still **teammates' tracks / not built in
-this repo**: the dashboard, the voice/broadcast, and the real YOLO11+SAHI detector. Next planned
-work is the real-terrain animated showcase — see **`docs/showcase-kickoff.md`**. Deferred items
-and honest limitations live in **`docs/brain_followups.md`**.
+(DEM + WorldCover), a detector *simulator*, the closed loop end-to-end, and the **real-terrain
+animated showcase** (`src/demo/showcase.py` → `demo_output/showcase.gif`; locates on real Marin
+terrain at 0-cell error — closed `brain_followups.md` B5). Run the synthetic demo with
+`python -m src.demo.run`, the showcase with `python -m src.demo.showcase`, and the suite with
+`pytest` (101 tests). Still **teammates' tracks / not built in this repo**: the dashboard, the
+voice/broadcast, and the real YOLO11+SAHI detector. Next planned work is **C1 — sectorized
+grid-search + multi-drone** (committed before the final hackathon showcase; design in
+`docs/brain_followups.md` C1). Deferred items and honest limitations live in
+**`docs/brain_followups.md`**.
 
 ---
 

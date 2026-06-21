@@ -69,20 +69,31 @@ the current design (state these out loud; don't let a demo imply otherwise).
   invariant: an extreme peak holding most of the map's mass still scales with grid size.
   For normal localized finds this is fine; it is called out so the claim isn't overstated.
 
-### B5. Real terrain makes the find harder — demo scenario needs re-design
-- **Status:** `RasterTerrain` (real DEM + WorldCover) is built and tested (Geo Unit 5) and
-  the demo can run on it via `python -m src.demo.run --real-terrain`. But the demo's
-  scenario (subject placement, scripted flight path, threshold) is tuned for the SYNTHETIC
-  stub, and on **real** terrain it does **not** reliably locate.
-- **Why:** the AOI is ~72% dense tree canopy, so a realistic subject has low visibility
-  (~0.4 → ~40% detection, marginal persistence), AND a realistic subject sits at ~average
-  prior, so its concentration (~3x) overlaps with false positives (~3.5x). The synthetic
-  demo hid this by placing the subject in a favorable corridor at above-average prior.
-- **What's needed (folded into the advanced-demo work):** relocate the subject to a
-  findable real cell, redirect the flight path to match, make thermal detection effective
-  under canopy (defensible for the dusk scenario), and recalibrate the threshold. This is
-  scenario design, which overlaps the planned advanced visual demo — see that effort.
-- **Default stays synthetic** so the demo locates reliably out of the box.
+### B5. Real terrain makes the find harder — demo scenario re-design — RESOLVED
+- **Status:** RESOLVED (real-terrain animated showcase, `src/demo/showcase.py`). On the real
+  rasters the loop now locates the planted subject at **0-cell error across seeds** (acceptance
+  test `tests/test_showcase.py::test_real_terrain_loop_locates_the_subject`).
+- **Why it was hard:** the AOI is ~72% dense tree canopy, so a realistic subject has low
+  visibility (~0.4 → ~40% color detection, marginal persistence), AND a realistic subject sits
+  at ~average prior, so its concentration overlapped with false positives. The synthetic demo
+  hid this by placing the subject in a favorable corridor at above-average prior.
+- **What closed it (the four scenario changes):**
+  1. **Subject placement** — relocated to a real findable cell: `REAL_TERRAIN_SUBJECT_OFFSET =
+     (16, -16)` = cell (93, 80), ~1.13 km NW, tree cover, ~2.6× the map-mean prior (chosen by
+     scanning the DEM+WorldCover for tree + accessible + above-avg-prior near the LKP). Added via
+     an `offset` **seam** on `subject_cell`/`build_scripted_path` so the synthetic default (and
+     its test) are untouched — the two scenarios no longer share one tuning.
+  2. **Thermal floor** — `BrainConfig.thermal_detection_floor` (default 0.0 = off; showcase 0.8),
+     applied to THERMAL only in `detector_sim`, encodes that heat penetrates canopy gaps at dusk
+     so the thermal pass reliably corroborates a forested subject.
+  3. **Flight path** — `build_scripted_path` generalized to a direction-agnostic sweep (flies the
+     LKP→subject band whichever way it lies; reduces to the old SW path for the synthetic default).
+  4. **Threshold** — `located_concentration_ratio` recalibrated for real terrain in
+     `SHOWCASE_CONFIG` (3.5: above the subject's ~2.6× prior baseline so the gate discriminates,
+     below the thermal-corroborated find peak ~5.3–6.8× so it locates with margin; persistence
+     n=3 is the false-positive guard). Empirically locates 6/6 seeds at 0-cell error.
+- **Default stays synthetic** (`python -m src.demo.run`) so the original demo locates out of the
+  box; the real-terrain showcase is `python -m src.demo.showcase`.
 
 ### B4. Georeferencing fidelity & real terrain (separate tracks, not the brain)
 - The prior uses a **synthetic** terrain stub (a hand-shaped ridge + drainage) and
@@ -121,4 +132,23 @@ located trigger, or the single-writer `MapState`.
   (no overlap)** and **operator legibility** (named, assignable sectors), not single-drone speed.
 - **Invariants preserved:** single-writer `MapState`, fine-grained Bayesian belief, the located
   trigger. The new logic is a consumer/producer around the map, not a rewrite of it.
-- **Status:** post-demo. Captured here so the design intent isn't lost.
+- **Status:** QUEUED — post-demo, **before the final hackathon showcase**. Committed next step
+  (not just a someday-maybe): build the sectorized grid search + multi-drone layer after this
+  showcase and before the end-of-event project showcase. Captured here so the design intent
+  isn't lost.
+
+### C2. contextily real-map-tiles backdrop (showcase "secondary visual path")
+The real-terrain showcase (`src/demo/showcase.py`) renders the posterior over a **DEM hillshade**
+backdrop — chosen for zero new deps, offline determinism, and because the shaded relief visually
+*explains* the prior (you see the ridge/drainage the search hugs). A nicer-looking alternative is
+**`contextily`** real map tiles (OSM streets or satellite imagery) for a "Google-Maps-credible"
+backdrop.
+- **Why deferred, not split:** `contextily` adds a dependency AND a render-time network fetch (a
+  flaky point for a live demo), and aligning the posterior to Web-Mercator tiles needs a
+  reprojection the hillshade route avoids (the hillshade is already in the grid's cell frame). We
+  deliberately committed to **one** route (hillshade) rather than splitting effort.
+- **If picked up:** add it as a *secondary* render path behind a flag (e.g. `--basemap=tiles`),
+  reusing the same `FrameState`s and markers; the only new work is fetching tiles for the AOI bbox
+  (`GridSpec.cell_to_latlon` on the corners) and reprojecting the posterior overlay to match.
+- **Status:** optional polish — pick up only if spare time appears; the hillshade route is the
+  committed one.

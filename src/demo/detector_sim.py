@@ -186,6 +186,12 @@ class DetectorSimulator:
             # Detection probability = sensor-modulated visibility at the subject's cell.
             base_vis = float(self._visibility[self.subject_cell[0], self.subject_cell[1]])
             p_detect = min(max(base_vis * self._cfg.visibility_factor_for(sensor_type.value), 0.0), 1.0)
+            # Thermal floor: under dense canopy base_vis is low, so even thermal's lift leaves
+            # p_detect marginal. The floor (config, default 0.0=off) encodes that body heat
+            # penetrates canopy gaps at dusk, so a thermal pass reliably detects a forested
+            # subject. Thermal only — color stays canopy-gated (keeps the contrast honest).
+            if sensor_type == SensorType.THERMAL:
+                p_detect = max(p_detect, self._cfg.thermal_detection_floor)
             if self._rng.random() < p_detect:
                 base_conf = self._thermal_conf if sensor_type == SensorType.THERMAL else self._color_conf
                 conf = float(np.clip(base_conf + self._rng.normal(0.0, self._conf_noise), 0.0, 1.0))
