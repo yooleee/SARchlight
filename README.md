@@ -4,6 +4,8 @@
 
 UC Berkeley AI Hackathon 2026 · wide-area Search & Rescue support.
 
+Associated Devpost: https://devpost.com/software/sarchlight
+
 SARchlight is the *brain* behind a search-and-rescue drone — not the drone itself. It builds a
 live probability map of where a missing person likely is from last-known position, terrain, and
 land cover; directs drones to the highest-probability sectors; turns image detections into ground
