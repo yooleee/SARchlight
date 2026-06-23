@@ -11,6 +11,16 @@ locations; updates the map from **both detections and clean non-detections**; co
 drones so they never re-cover the same ground; and declares a subject *located* only after
 persistent evidence. Once found, a drone guides the subject home and the system speaks to them.
 
+> **Scope.** SARchlight is the decision layer, demonstrated **in simulation** — there is no real
+> drone or live flight here. The demos run on **simulated detections** and a **scripted, simulated
+> flight** over **real terrain data**, with a **stationary** subject. A real YOLO detector path
+> exists but has **not been run on real footage**, and no detector has been fine-tuned, so detection
+> accuracy on real aerial imagery is untested. The "zero-cell locate on real terrain" result below is
+> produced by the brain, GeoReferencer, and planner driven by the simulator, not by real perception.
+> Real drone telemetry, footage, thermal sensing, and a moving-target model are future work (see
+> **What's next**). The original team repository is
+> [Mudit-Arora/SAR-system](https://github.com/Mudit-Arora/SAR-system).
+
 ---
 
 ## The closed loop
@@ -23,8 +33,9 @@ prior map ─▶ directs search path ─▶ detector on footage ─▶ detection
               confident, persistent detection ─▶ subject broadcast + operator alert ─▶ guide home
 ```
 
-The flight path is **not scripted** — it *emerges* from the map. A detection (or a clean sweep)
-changes the belief, and the changed belief changes where the drones go next.
+In the multi-drone planner demo, the flight path is not hand-drawn — it *emerges* from the map: a
+detection (or a clean sweep) changes the belief, and the changed belief changes where the simulated
+drones go next. (The geo+brain feasibility demo uses a fixed scripted path.)
 
 ## What's inside
 
@@ -37,7 +48,7 @@ changes the belief, and the changed belief changes where the drones go next.
   canopy means "didn't see" ≠ "not there", so probability is down-weighted, never erased.
 - **`located` trigger.** Confidence-as-likelihood-ratio (clipped) + persistence, so a single
   false-positive aerial frame can't trip an alert. Locates at **zero-cell error on real Marin
-  terrain** in the demo.
+  terrain rasters** in the demo, driven by simulated detections.
 - **Multi-drone planner.** Probability-of-area ranking with disjoint sector assignment and a
   boustrophedon sweep — no overlapping coverage.
 - **GeoReferencer.** Projects pixel detection boxes to ground cells; geography lives in exactly one
